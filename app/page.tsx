@@ -1,113 +1,130 @@
+'use client';
+
 import Image from "next/image";
+import { useEffect, useState } from "react";
+
+import { draw } from "./lib/api";
+import { ActionRow, CardRow } from "./components";
+import { CardData, DeckContext } from "./types";
+
+const PLAYER_WIN_STRING = "You win!";
+const DEALER_WIN_STRING = "Dealer wins."
+
+type GameState = {
+  dealerHand: CardData[]
+  playerHand: CardData[]
+  dealerHandSum: number
+  playerHandSum: number
+  gameIsOver: boolean
+  winnerString: string
+}
 
 export default function Home() {
+  const [gameState, setGameState] = useState<GameState>({
+    dealerHand: [],
+    playerHand: [],
+    dealerHandSum: 0,
+    playerHandSum: 0,
+    gameIsOver: false,
+    winnerString: PLAYER_WIN_STRING
+  });
+  const [deckContext, setDeckContext] = useState<DeckContext>({
+    deck_id: "",
+    remaining: 0
+  });
+
+  const drawCards = async (numberOfCards: number): Promise<CardData[]> => {
+    const drawData = await draw(deckContext, numberOfCards);
+    setDeckContext(drawData.context);
+    return drawData.cards;
+  }
+
+  const initialize = async () => {
+    const cards = await drawCards(4);
+    const dealerCards = cards.slice(0,2)
+    const playerCards = cards.slice(2);
+    setGameState({
+      dealerHand: dealerCards,
+      playerHand: playerCards,
+      dealerHandSum: getHandSum(dealerCards),
+      playerHandSum: getHandSum(playerCards),
+      gameIsOver: false,
+      winnerString: ""
+    });
+  }
+
+  const getHandSum = (hand: CardData[]) => {
+    let numAces = 0;
+    const sumNoAces = hand.reduce((a,v) => {
+      if (v.value === 'ACE') {
+        numAces = numAces+1;
+        return a;
+      }
+      return a + (parseInt(v.value) || 10);
+    }, 0);
+    let sum = sumNoAces + numAces;
+    for (let i=0; i<numAces; i++) {
+      if (sum+10 < 22) {
+        sum = sum + 10;
+      }
+    }
+    return sum;
+  }
+
+  const endGame = () => {
+    let winnerString = PLAYER_WIN_STRING;
+    if (gameState.playerHandSum > 21 ||
+        gameState.dealerHandSum >= gameState.playerHandSum
+    ) {
+      winnerString = DEALER_WIN_STRING;
+    }
+    setGameState(Object.assign({}, gameState, { gameIsOver: true, winnerString }));
+  }
+
+  const onHitHandler = async () => {
+    const cards = await drawCards(1);
+    const playerHand = [...gameState.playerHand, cards[0]];
+    const playerHandSum = getHandSum(playerHand);
+    setGameState(Object.assign({}, gameState, { playerHand, playerHandSum }));
+  }
+
+  const onStandHandler = () => {
+    setGameState(Object.assign({}, gameState, { gameIsOver: true }))
+  }
+
+  useEffect(() => {
+    initialize();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (gameState.playerHandSum > 20) {
+      endGame();
+    }
+  }, [gameState.playerHandSum]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:size-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <main className="blackjack">
+      <div className="gameOverNotification" style={{ display: (gameState.gameIsOver ? "flex" : "none") }}>
+        <div className="winLoseMessage">
+          {gameState.winnerString}
+        </div>
+        <div className="newGame">
+          <button className="newGameBtn" onClick={initialize}>New Game</button>
         </div>
       </div>
-
-      <div className="relative z-[-1] flex place-items-center before:absolute before:h-[300px] before:w-full before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 sm:before:w-[480px] sm:after:w-[240px] before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
+      <div className="playerLabel">
+        Dealer
       </div>
-
-      <div className="mb-32 grid text-center lg:mb-0 lg:w-full lg:max-w-5xl lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-balance text-sm opacity-50">
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
+      <CardRow data={gameState.dealerHand} />
+      <div className="playerLabel">
+        You
       </div>
+      <CardRow data={gameState.playerHand} />
+      <ActionRow
+        onHit={onHitHandler}
+        onStand={endGame}
+        disabled={gameState.gameIsOver}
+      />
     </main>
   );
 }
